@@ -1,6 +1,8 @@
-class Batterie:
+class BatterieSensor:
     def __init__(self, niveau_initial=100, ipv6_address="fe80::1"):
-        self.niveau = niveau_initial  # Niveau de batterie en pourcentage
+        """Initialise la batterie avec un niveau initial (par défaut à 100%)."""
+
+        self.niveau = niveau_initial  
         self.ipv6_address = ipv6_address
 
     def consommer(self, quantite):
@@ -18,6 +20,10 @@ class Batterie:
     def get_niveau(self):
         """Retourne le niveau actuel de la batterie."""
         return self.niveau
+    
+    def get_ipv6_address(self):
+        """Retourne l'adresse IPv6 de la batterie."""
+        return self.ipv6_address
     
     def simulate_drain(self, taux_drain):
         """Simule la décharge de la batterie sur une période donnée."""
