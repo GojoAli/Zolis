@@ -6,10 +6,12 @@ import time
 from flask import Flask, jsonify, render_template
 import paho.mqtt.client as mqtt
 
-BROKER_HOST = "localhost"
-BROKER_PORT =1883
-TOPIC = "Naruto Best Anime"
-CLIENT_ID = "Sassuke"
+from Couches.CONF import CONF
+
+BROKER_HOST = CONF.MQTT_BROKER_ADDRESS
+BROKER_PORT = CONF.MQTT_BROKER_PORT
+TOPIC = CONF.MQTT_TOPIC
+CLIENT_ID = CONF.MQTT_CLIENT_ID
 
 app = Flask(__name__)
 

@@ -2,13 +2,15 @@ import json
 from time import sleep
 import paho.mqtt.client as mqtt
 
+from Couches.CONF import CONF
+
 class MQTT:
     """
     La classe MQTT est responsable de la gestion de la communication MQTT.
     Elle envoie les données reçues du Routeur vers un broker MQTT.
     """
 
-    def __init__(self, broker_host="localhost", broker_port=1883, client_id=None, topic="Naruto Best Anime"):
+    def __init__(self, broker_host=CONF.MQTT_BROKER_ADDRESS, broker_port=CONF.MQTT_BROKER_PORT, client_id=CONF.MQTT_CLIENT_ID, topic=CONF.MQTT_TOPIC):
         self.broker_host = broker_host
         self.broker_port = broker_port
 
@@ -21,7 +23,7 @@ class MQTT:
         self.client.on_message = self.on_message
 
 
-        self.client.connect(broker_host, broker_port, 60)
+        self.client.connect(self.broker_host, self.broker_port, 60)
 
         self.client.loop_start()
     

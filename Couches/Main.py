@@ -1,20 +1,19 @@
 import os
 import time
 
-from Couche1.EndDevices.Batterie import BatterieSensor
-from Couche1.EndDevices.GPS import GPSSensor
-from Couche1.EndDevices.Temperature import TemperatureSensor
-from Couche1.Leader import Leader
-from Couche1.Routeur import Routeur
-from couche3.MQTT import MQTT
+from Couches.Couche1.EndDevices.Batterie import BatterieSensor
+from Couches.Couche1.EndDevices.GPS import GPSSensor
+from Couches.Couche1.EndDevices.Temperature import TemperatureSensor
+from Couches.Couche1.Leader import Leader
+from Couches.Couche1.Routeur import Routeur
+from Couches.Couche3.MQTT import MQTT
+from Couches.CONF import CONF
 
-BROKER_HOST = "localhost"
-BROKER_PORT =1883
-TOPIC = "Naruto Best Anime"
+
 
 
 def main():
-    mqtt_client = MQTT(broker_host=BROKER_HOST, broker_port=BROKER_PORT, client_id="Naruto", topic=TOPIC)
+    mqtt_client = MQTT(broker_host=CONF.MQTT_BROKER_ADDRESS, broker_port=CONF.MQTT_BROKER_PORT, client_id=CONF.MQTT_PRODUCER_ID, topic=CONF.MQTT_TOPIC)
 
     gps = GPSSensor(latitude=48.8566, longitude=2.3522)
     temperature = TemperatureSensor(location="Paris")
@@ -30,7 +29,7 @@ def main():
 
         leader.format_data(gps, temperature, batterie)
         leader.send_data(routeur)
-        routeur.send_data(routeur.data, mqtt_client, topic=TOPIC)
+        routeur.send_data(routeur.data, mqtt_client, topic=CONF.MQTT_TOPIC)
 
         time.sleep(1)
 
