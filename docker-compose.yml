@@ -80,11 +80,9 @@ services:
       MQTT_BROKER_ADDRESS: mqtt_broker
       MQTT_BROKER_PORT: 1883
       MQTT_TOPIC: "Naruto Best Anime"
+      MQTT_CLIENT_ID: "backend-subscriber"
       MQTT_PRODUCER_ID: "NarutoProducer"
-      COAP_GPS_HOST: coap-gps
-      COAP_BATTERY_HOST: coap-batt
-      COAP_TEMP_HOST: coap-temp
-      COAP_POLL_INTERVAL: "1.0"
+      COAP_ROUTEUR_HOST: coap-routeur
       DATABASE_URL: "postgresql://zolis:zolis@db:5432/zolis"
       SHARED_KEY: "zolis-key"
     depends_on:
@@ -105,7 +103,7 @@ services:
       MQTT_BROKER_ADDRESS: mqtt_broker
       MQTT_BROKER_PORT: 1883
       MQTT_TOPIC: "Naruto Best Anime"
-      MQTT_CLIENT_ID: "NarutoClient"
+      MQTT_CLIENT_ID: "frontend-subscriber"
     depends_on:
       - mqtt_broker
 
@@ -138,6 +136,36 @@ services:
     working_dir: /app
     environment:
       SHARED_KEY: "zolis-key"
+
+  coap-leader:
+    build: .
+    container_name: coap-leader
+    command: python -m Couches.CoAPServices.leader_server
+    volumes:
+      - ./:/app
+    working_dir: /app
+    environment:
+      SHARED_KEY: "zolis-key"
+      COAP_GPS_HOST: coap-gps
+      COAP_BATTERY_HOST: coap-batt
+      COAP_TEMP_HOST: coap-temp
+      ELECTION_INTERVAL: "20"
+
+  coap-routeur:
+    build: .
+    container_name: coap-routeur
+    command: python -m Couches.CoAPServices.routeur_server
+    volumes:
+      - ./:/app
+    working_dir: /app
+    environment:
+      SHARED_KEY: "zolis-key"
+      COAP_LEADER_HOST: coap-leader
+      MQTT_BROKER_ADDRESS: mqtt_broker
+      MQTT_BROKER_PORT: 1883
+    depends_on:
+      - mqtt_broker
+      - coap-leader
 
   ot-rt:
     build:

@@ -1,27 +1,21 @@
 import asyncio
 import json
+import math
 import os
 import time
-import math
 import uuid
 
+import aiocoap
+import paho.mqtt.client as mqtt
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-import aiocoap
-
+from Couches.Backend.db import Measure, Runner, Session, SessionLocal
 from Couches.CONF import CONF
-from Couches.Couche3.MQTT import MQTT
 from Couches.Couche3.Validation import Validation
-from Couches.Backend.db import SessionLocal, Runner, Session, Measure
 
-
-COAP_GPS_HOST = os.getenv("COAP_GPS_HOST", "coap-gps")
-COAP_BATTERY_HOST = os.getenv("COAP_BATTERY_HOST", "coap-batt")
-COAP_TEMP_HOST = os.getenv("COAP_TEMP_HOST", "coap-temp")
-POLL_INTERVAL = float(os.getenv("COAP_POLL_INTERVAL", "1.0"))
+COAP_ROUTEUR_HOST = os.getenv("COAP_ROUTEUR_HOST", "coap-routeur")
 SHARED_KEY = os.getenv("SHARED_KEY", "zolis-key")
-
 
 app = FastAPI()
 app.add_middleware(
@@ -48,7 +42,6 @@ validator = Validation()
 
 
 def haversine_m(lat1, lon1, lat2, lon2):
-    """Distance en mètres entre deux points GPS (Haversine)."""
     r = 6371000.0
     phi1 = math.radians(lat1)
     phi2 = math.radians(lat2)
@@ -60,91 +53,30 @@ def haversine_m(lat1, lon1, lat2, lon2):
     return r * c
 
 
-async def coap_get(protocol, uri):
-    request = aiocoap.Message(code=aiocoap.GET, uri=uri)
+async def coap_collect():
+    protocol = await aiocoap.Context.create_client_context()
+    request = aiocoap.Message(
+        code=aiocoap.POST,
+        uri=f"coap://{COAP_ROUTEUR_HOST}/collect",
+        payload=json.dumps({"key": SHARED_KEY}).encode("utf-8"),
+    )
     response = await protocol.request(request).response
     payload = response.payload.decode("utf-8", errors="replace")
     return json.loads(payload)
 
 
-async def poll_loop():
-    protocol = await aiocoap.Context.create_client_context()
-    while True:
-        try:
-            gps = await coap_get(protocol, f"coap://{COAP_GPS_HOST}/gps")
-            batt = await coap_get(protocol, f"coap://{COAP_BATTERY_HOST}/battery")
-            temp = await coap_get(protocol, f"coap://{COAP_TEMP_HOST}/temperature")
-
-            if gps.get("key") != SHARED_KEY:
-                await asyncio.sleep(POLL_INTERVAL)
-                continue
-            if batt.get("key") != SHARED_KEY:
-                await asyncio.sleep(POLL_INTERVAL)
-                continue
-            if temp.get("key") != SHARED_KEY:
-                await asyncio.sleep(POLL_INTERVAL)
-                continue
-
-            lat = gps.get("lat")
-            lon = gps.get("lon")
-            temperature = temp.get("temperature")
-            humidite = temp.get("humidite")
-            pression = temp.get("pression")
-            batterie = batt.get("batterie")
-
-            if not validator.check_gps(lat, lon):
-                await asyncio.sleep(POLL_INTERVAL)
-                continue
-            if not validator.check_temp(temperature):
-                await asyncio.sleep(POLL_INTERVAL)
-                continue
-            if not validator.check_humidite(humidite):
-                await asyncio.sleep(POLL_INTERVAL)
-                continue
-            if not validator.check_pression(pression):
-                await asyncio.sleep(POLL_INTERVAL)
-                continue
-            if batterie is None or not (0 <= batterie <= 100):
-                await asyncio.sleep(POLL_INTERVAL)
-                continue
-
-            if app.state.last_point is not None:
-                prev_lat, prev_lon = app.state.last_point
-                app.state.total_distance_m += haversine_m(prev_lat, prev_lon, lat, lon)
-            app.state.last_point = (lat, lon)
-
-            payload = {
-                "gps": {"latitude": lat, "longitude": lon},
-                "temperature": temperature,
-                "humidite": humidite,
-                "pression": pression,
-                "batterie": batterie,
-                "distance_m": round(app.state.total_distance_m, 2),
-            }
-
-            latest_data.update(payload)
-            latest_data["ts"] = time.time()
-
-            app.state.mqtt.publish(payload, topic=CONF.MQTT_TOPIC)
-            _persist_measure(payload)
-        except Exception:
-            pass
-
-        await asyncio.sleep(POLL_INTERVAL)
-
-
 @app.on_event("startup")
 async def startup():
-    app.state.mqtt = MQTT(
-        broker_host=CONF.MQTT_BROKER_ADDRESS,
-        broker_port=CONF.MQTT_BROKER_PORT,
-        client_id=CONF.MQTT_PRODUCER_ID,
-        topic=CONF.MQTT_TOPIC,
-    )
+    client = mqtt.Client(client_id=CONF.MQTT_CLIENT_ID)
+    client.on_message = on_mqtt_message
+    client.connect(CONF.MQTT_BROKER_ADDRESS, CONF.MQTT_BROKER_PORT, 60)
+    client.subscribe(CONF.MQTT_TOPIC)
+    client.loop_start()
+    app.state.mqtt_sub = client
+
     app.state.last_point = None
     app.state.total_distance_m = 0.0
     app.state.current_session_id = None
-    asyncio.create_task(poll_loop())
 
 
 @app.get("/api/latest")
@@ -181,27 +113,10 @@ def create_runner(payload: dict):
     return {"runner": runners[runner_id], "session_id": app.state.current_session_id}
 
 
-def _persist_measure(payload):
-    session_id = app.state.current_session_id
-    if not session_id:
-        return
-
-    with SessionLocal() as db:
-        measure = Measure(
-            session_id=session_id,
-            lat=payload["gps"]["latitude"],
-            lon=payload["gps"]["longitude"],
-            temperature=payload["temperature"],
-            humidite=payload["humidite"],
-            pression=payload["pression"],
-            batterie=payload["batterie"],
-            distance_m=payload["distance_m"],
-        )
-        db.add(measure)
-        session = db.get(Session, session_id)
-        if session is not None:
-            session.total_distance_m = payload["distance_m"]
-        db.commit()
+@app.post("/api/collect")
+async def collect():
+    payload = await coap_collect()
+    return payload
 
 
 @app.get("/api/sessions/{session_id}")
@@ -243,3 +158,70 @@ def get_measures(session_id: str, limit: int = 1000):
             }
             for m in q
         ]
+
+
+def _persist_measure(payload):
+    session_id = app.state.current_session_id
+    if not session_id:
+        return
+
+    with SessionLocal() as db:
+        measure = Measure(
+            session_id=session_id,
+            lat=payload["gps"]["latitude"],
+            lon=payload["gps"]["longitude"],
+            temperature=payload["temperature"],
+            humidite=payload["humidite"],
+            pression=payload["pression"],
+            batterie=payload["batterie"],
+            distance_m=payload["distance_m"],
+        )
+        db.add(measure)
+        session = db.get(Session, session_id)
+        if session is not None:
+            session.total_distance_m = payload["distance_m"]
+        db.commit()
+
+
+def on_mqtt_message(client, userdata, msg):
+    try:
+        data = json.loads(msg.payload.decode("utf-8", errors="replace"))
+    except Exception:
+        return
+
+    lat = data.get("gps", {}).get("latitude")
+    lon = data.get("gps", {}).get("longitude")
+    temperature = data.get("temperature")
+    humidite = data.get("humidite")
+    pression = data.get("pression")
+    batterie = data.get("batterie")
+
+    if not validator.check_gps(lat, lon):
+        return
+    if not validator.check_temp(temperature):
+        return
+    if not validator.check_humidite(humidite):
+        return
+    if not validator.check_pression(pression):
+        return
+    if batterie is None or not (0 <= batterie <= 100):
+        return
+
+    if app.state.last_point is not None:
+        prev_lat, prev_lon = app.state.last_point
+        app.state.total_distance_m += haversine_m(prev_lat, prev_lon, lat, lon)
+    app.state.last_point = (lat, lon)
+
+    payload = {
+        "gps": {"latitude": lat, "longitude": lon},
+        "temperature": temperature,
+        "humidite": humidite,
+        "pression": pression,
+        "batterie": batterie,
+        "distance_m": round(app.state.total_distance_m, 2),
+    }
+
+    latest_data.update(payload)
+    latest_data["ts"] = time.time()
+
+    _persist_measure(payload)

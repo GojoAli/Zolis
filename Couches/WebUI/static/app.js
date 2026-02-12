@@ -9,6 +9,7 @@ const distanceEl = document.getElementById("distance");
 const distanceTotalEl = document.getElementById("distanceTotal");
 const tsEl = document.getElementById("timestamp");
 const loadHistoryBtn = document.getElementById("loadHistory");
+const collectNowBtn = document.getElementById("collectNow");
 
 const backend = window.BACKEND_HTTP || "http://127.0.0.1:8000";
 const params = new URLSearchParams(window.location.search);
@@ -41,6 +42,9 @@ function updateStatus(isLive) {
 
 async function refresh() {
   try {
+    if (sessionId) {
+      fetch(`${backend}/api/collect`, { method: "POST" }).catch(() => {});
+    }
     const response = await fetch("/api/latest", { cache: "no-store" });
     const data = await response.json();
     if (!data || !data.gps) {
@@ -113,6 +117,22 @@ async function loadHistory() {
 
 if (loadHistoryBtn) {
   loadHistoryBtn.addEventListener("click", loadHistory);
+}
+
+async function collectNow() {
+  if (!sessionId) {
+    alert("Aucune session active. Enregistre un coureur.");
+    return;
+  }
+  try {
+    await fetch(`${backend}/api/collect`, { method: "POST" });
+  } catch (err) {
+    alert("Collect impossible.");
+  }
+}
+
+if (collectNowBtn) {
+  collectNowBtn.addEventListener("click", collectNow);
 }
 
 async function loadSessionMeta() {
