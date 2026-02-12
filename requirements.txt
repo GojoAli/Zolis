@@ -1,2 +1,8 @@
 flask==3.0.3
 paho-mqtt==2.1.0
+fastapi==0.115.8
+uvicorn==0.30.6
+aiocoap==0.4.7
+SQLAlchemy==2.0.37
+psycopg2-binary==2.9.9
+alembic==1.14.0

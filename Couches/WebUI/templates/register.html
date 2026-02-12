@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Zolis · Enregistrement</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Zolis</p>
+        <h1>Enregistrer un coureur</h1>
+      </div>
+      <a class="status" href="/">Accéder au tracking</a>
+    </header>
+
+    <main class="content single">
+      <section class="card form-card">
+        <h2>Informations</h2>
+        <form id="registerForm">
+          <label>Nom
+            <input type="text" id="name" required />
+          </label>
+          <label>Email
+            <input type="email" id="email" required />
+          </label>
+          <label>Device GPS (IPv6)
+            <input type="text" id="gps" placeholder="fd00::1" />
+          </label>
+          <label>Device Batterie (IPv6)
+            <input type="text" id="batt" placeholder="fd00::2" />
+          </label>
+          <label>Device Temp (IPv6)
+            <input type="text" id="temp" placeholder="fd00::3" />
+          </label>
+          <button type="submit">Démarrer tracking</button>
+        </form>
+        <p class="muted" id="statusMsg"></p>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const backend = "{{ backend_http }}";
+    const form = document.getElementById("registerForm");
+    const statusMsg = document.getElementById("statusMsg");
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      statusMsg.textContent = "Enregistrement...";
+      const payload = {
+        name: document.getElementById("name").value.trim(),
+        email: document.getElementById("email").value.trim(),
+        devices: {
+          gps: document.getElementById("gps").value.trim(),
+          batterie: document.getElementById("batt").value.trim(),
+          temperature: document.getElementById("temp").value.trim(),
+        },
+      };
+      try {
+        const res = await fetch(`${backend}/api/runners`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          throw new Error("Erreur enregistrement");
+        }
+        const data = await res.json();
+        localStorage.setItem("zolis_session_id", data.session_id);
+        window.location.href = `/?session_id=${data.session_id}`;
+      } catch (err) {
+        statusMsg.textContent = "Impossible d'enregistrer. Vérifie le backend.";
+      }
+    });
+  </script>
+</body>
+</html>

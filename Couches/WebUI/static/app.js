@@ -5,7 +5,14 @@ const tempEl = document.getElementById("temperature");
 const humiditeEl = document.getElementById("humidite");
 const pressionEl = document.getElementById("pression");
 const battEl = document.getElementById("batterie");
+const distanceEl = document.getElementById("distance");
+const distanceTotalEl = document.getElementById("distanceTotal");
 const tsEl = document.getElementById("timestamp");
+const loadHistoryBtn = document.getElementById("loadHistory");
+
+const backend = window.BACKEND_HTTP || "http://127.0.0.1:8000";
+const params = new URLSearchParams(window.location.search);
+const sessionId = params.get("session_id") || localStorage.getItem("zolis_session_id");
 
 const map = L.map("map", { zoomControl: false }).setView([0, 0], 2);
 L.control.zoom({ position: "bottomright" }).addTo(map);
@@ -69,6 +76,9 @@ async function refresh() {
     battEl.textContent = data.batterie !== null && data.batterie !== undefined
       ? `${Number(data.batterie).toFixed(0)} %`
       : "--";
+    distanceEl.textContent = data.distance_m !== null && data.distance_m !== undefined
+      ? `${Number(data.distance_m).toFixed(1)} m`
+      : "--";
     tsEl.textContent = data.ts
       ? new Date(data.ts * 1000).toLocaleTimeString("fr-FR")
       : "--";
@@ -80,5 +90,50 @@ async function refresh() {
   }
 }
 
+async function loadHistory() {
+  if (!sessionId) {
+    alert("Aucune session active. Enregistre un coureur.");
+    return;
+  }
+  try {
+    const res = await fetch(`${backend}/api/sessions/${sessionId}/measures`);
+    if (!res.ok) {
+      throw new Error("history");
+    }
+    const measures = await res.json();
+    const latlngs = measures.map((m) => [m.lat, m.lon]);
+    path.setLatLngs(latlngs);
+    if (latlngs.length > 0) {
+      map.fitBounds(path.getBounds(), { padding: [30, 30] });
+    }
+  } catch (err) {
+    alert("Impossible de charger l'historique.");
+  }
+}
+
+if (loadHistoryBtn) {
+  loadHistoryBtn.addEventListener("click", loadHistory);
+}
+
+async function loadSessionMeta() {
+  if (!sessionId) {
+    return;
+  }
+  try {
+    const res = await fetch(`${backend}/api/sessions/${sessionId}`);
+    if (!res.ok) {
+      return;
+    }
+    const session = await res.json();
+    distanceTotalEl.textContent = `Total: ${Number(session.total_distance_m).toFixed(1)} m`;
+  } catch (err) {
+    // ignore
+  }
+}
+
 setInterval(refresh, 1000);
 refresh();
+loadSessionMeta();
+if (sessionId) {
+  loadHistory();
+}

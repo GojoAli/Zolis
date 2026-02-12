@@ -22,6 +22,10 @@
         <span id="statusText">En attente de données</span>
       </div>
     </header>
+    <div class="status">
+      <a href="/register">Enregistrer un coureur</a>
+      <button id="loadHistory">Charger l'historique</button>
+    </div>
 
     <main class="content">
       <section class="map-wrap">
@@ -33,6 +37,11 @@
           <h2>Position</h2>
           <p id="coords">--</p>
           <p class="muted" id="timestamp">--</p>
+        </div>
+        <div class="card">
+          <h2>Distance</h2>
+          <p id="distance">--</p>
+          <p class="muted" id="distanceTotal">--</p>
         </div>
         <div class="card">
           <h2>Température</h2>
@@ -55,6 +64,9 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script>
+    window.BACKEND_HTTP = "{{ backend_http }}";
+  </script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

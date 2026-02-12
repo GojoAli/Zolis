@@ -14,6 +14,7 @@ TOPIC = CONF.MQTT_TOPIC
 CLIENT_ID = CONF.MQTT_CLIENT_ID
 
 app = Flask(__name__)
+BACKEND_HTTP = os.getenv("BACKEND_HTTP", "http://127.0.0.1:8000")
 
 latest_data = {
     "gps": {"latitude": 0.0, "longitude": 0.0},
@@ -81,7 +82,12 @@ def mqtt_worker():
 
 @app.get("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", backend_http=BACKEND_HTTP)
+
+
+@app.get("/register")
+def register():
+    return render_template("register.html", backend_http=BACKEND_HTTP)
 
 
 @app.get("/api/latest")
