@@ -8,4 +8,4 @@ COPY . /app
 # Installer les dépendances requises
 RUN pip install --no-cache-dir -r requirements.txt
 # Commande pour exécuter le script Python
-CMD ["python3", "-m", "Couches.Couches.EndDevice.Batterie"]
+CMD ["python3", "-m", "Couches.Main"]

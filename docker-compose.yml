@@ -1,5 +1,3 @@
-# Lancer le container batterie
-
 services:
   batterie_sensor:
     build: .
@@ -8,11 +6,11 @@ services:
     volumes:
       - ./:/app
     working_dir: /app
-  
+
   gps_sensor:
     build: .
     container_name: gps_sensor
-    command: python -m Couches.Couche1.EndDevices.GPSSensor
+    command: python -m Couches.Couche1.EndDevices.GPS
     volumes:
       - ./:/app
     working_dir: /app
@@ -20,7 +18,7 @@ services:
   temperature_sensor:
     build: .
     container_name: temperature_sensor
-    command: python -m Couches.Couche1.EndDevices.TemperatureSensor
+    command: python -m Couches.Couche1.EndDevices.Temperature
     volumes:
       - ./:/app
     working_dir: /app
@@ -32,7 +30,7 @@ services:
     volumes:
       - ./:/app
     working_dir: /app
-  
+
   routeur:
     build: .
     container_name: routeur
@@ -40,13 +38,15 @@ services:
     volumes:
       - ./:/app
     working_dir: /app
-  
+
   mqtt_broker:
     image: eclipse-mosquitto:2.0
     container_name: mqtt_broker
     ports:
       - "1883:1883"
-    
+    volumes:
+      - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
   mysql_db:
     image: mysql:8.0
     container_name: mysql_db
@@ -63,6 +63,13 @@ services:
     volumes:
       - ./:/app
     working_dir: /app
+    environment:
+      MQTT_BROKER_ADDRESS: mqtt_broker
+      MQTT_BROKER_PORT: 1883
+      MQTT_TOPIC: "Naruto Best Anime"
+      MQTT_PRODUCER_ID: "NarutoProducer"
+    depends_on:
+      - mqtt_broker
 
   frontend:
     build: .
@@ -73,4 +80,28 @@ services:
     working_dir: /app
     ports:
       - "5000:5000"
+    environment:
+      MQTT_BROKER_ADDRESS: mqtt_broker
+      MQTT_BROKER_PORT: 1883
+      MQTT_TOPIC: "Naruto Best Anime"
+      MQTT_CLIENT_ID: "NarutoClient"
+    depends_on:
+      - mqtt_broker
 
+  ot-rt:
+    build:
+      context: .
+      dockerfile: Dockerfile.openthread
+    container_name: ot-rt
+    command: ["ot-cli-ftd", "1"]
+    stdin_open: true
+    tty: true
+
+  ot-batt:
+    build:
+      context: .
+      dockerfile: Dockerfile.openthread
+    container_name: ot-batt
+    command: ["ot-cli-ftd", "2"]
+    stdin_open: true
+    tty: true

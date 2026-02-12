@@ -1,3 +1,6 @@
+import time
+
+
 class GPSSensor:
     def __init__(self, latitude=0.0, longitude=0.0, ipv6_address="fe80::2"):
         """Initialise le GPS avec des coordonnées par défaut (0.0, 0.0)."""
@@ -22,3 +25,19 @@ class GPSSensor:
         """Simule un déplacement en modifiant les coordonnées GPS."""
         self.latitude += delta_latitude
         self.longitude += delta_longitude
+
+
+def main():
+    sensor = GPSSensor(latitude=48.8566, longitude=2.3522)
+    try:
+        while True:
+            sensor.simulate_movement(delta_latitude=0.0004, delta_longitude=0.0003)
+            lat, lng = sensor.get_coordinates()
+            print(f"GPS: {lat}, {lng}")
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass
+
+
+if __name__ == "__main__":
+    main()

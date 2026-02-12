@@ -1,4 +1,5 @@
 import random
+import time
 
 
 class TemperatureSensor:
@@ -43,3 +44,20 @@ class TemperatureSensor:
         self.temp = self.get_temp() + random.uniform(-0.5, 0.5)
         self.humidite = self.get_humidite() + random.uniform(-1.0, 1.0)
         self.pression = self.get_pression() + random.uniform(-0.5, 0.5)
+
+
+def main():
+    sensor = TemperatureSensor(location="Paris")
+    try:
+        while True:
+            sensor.simulate_temperature_change()
+            print(
+                f"Temp: {sensor.temp}°C, Humidité: {sensor.humidite}%, Pression: {sensor.pression} hPa"
+            )
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass
+
+
+if __name__ == "__main__":
+    main()

@@ -1,3 +1,6 @@
+import time
+
+
 class BatterieSensor:
     def __init__(self, niveau_initial=100, ipv6_address="fe80::1"):
         """Initialise la batterie avec un niveau initial (par défaut à 100%)."""
@@ -30,3 +33,21 @@ class BatterieSensor:
         if taux_drain < 0:
             raise ValueError("Le taux de décharge doit être positif.")
         self.niveau = max(0, self.niveau - taux_drain)
+
+
+def main():
+    sensor = BatterieSensor()
+    try:
+        while True:
+            sensor.simulate_drain(taux_drain=0.5)
+            print(f"Batterie: {sensor.get_niveau()}%")
+            if sensor.get_niveau() == 0:
+                print("Batterie vide.")
+                break
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass
+
+
+if __name__ == "__main__":
+    main()

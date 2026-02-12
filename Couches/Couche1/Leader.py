@@ -41,3 +41,33 @@ class Leader:
         """Simule l'envoi des données formatées au Routeur."""
         routeur.set_leader_data(self)
         print(f"Envoi des données au Routeur à l'adresse {routeur.ipv6_address}: {self.data}")
+
+
+def main():
+    from Couches.Couche1.EndDevices.Batterie import BatterieSensor
+    from Couches.Couche1.EndDevices.GPS import GPSSensor
+    from Couches.Couche1.EndDevices.Temperature import TemperatureSensor
+    import time
+
+    gps = GPSSensor(latitude=48.8566, longitude=2.3522)
+    temperature = TemperatureSensor(location="Paris")
+    batterie = BatterieSensor(niveau_initial=100)
+
+    leader = Leader()
+
+    try:
+        while True:
+            gps.simulate_movement(delta_latitude=0.0004, delta_longitude=0.0003)
+            temperature.simulate_temperature_change()
+            batterie.simulate_drain(taux_drain=0.5)
+
+            leader.format_data(gps, temperature, batterie)
+            print(f"Leader data: {leader.data}")
+
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass
+
+
+if __name__ == "__main__":
+    main()

@@ -23,7 +23,7 @@ class MQTT:
         self.client.on_message = self.on_message
 
 
-        self.client.connect(self.broker_host, self.broker_port, 60)
+        self._connect_with_retry()
 
         self.client.loop_start()
     
@@ -33,12 +33,22 @@ class MQTT:
     
     def on_disconnect(self, client, userdata, rc):
         print("MQTT déconnecté")
+
+    def _connect_with_retry(self, delay=1.0):
+        """Essaie de se connecter indéfiniment au broker MQTT."""
+        while True:
+            try:
+                self.client.connect(self.broker_host, self.broker_port, 60)
+                return
+            except Exception:
+                sleep(delay)
     
 
-    def publish(self, data):
+    def publish(self, data, topic=None):
         """Publication des données sur un topic MQTT."""
-        data= json.dumps(data)
-        result = self.client.publish(self.topic, str(data))
+        publish_topic = topic or self.topic
+        data = json.dumps(data)
+        result = self.client.publish(publish_topic, str(data))
         
     
     def subscribe(self):
