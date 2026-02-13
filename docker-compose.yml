@@ -6,6 +6,7 @@ services:
     volumes:
       - ./:/app
     working_dir: /app
+    profiles: ["legacy"]
 
   gps_sensor:
     build: .
@@ -14,6 +15,7 @@ services:
     volumes:
       - ./:/app
     working_dir: /app
+    profiles: ["legacy"]
 
   temperature_sensor:
     build: .
@@ -22,6 +24,7 @@ services:
     volumes:
       - ./:/app
     working_dir: /app
+    profiles: ["legacy"]
 
   leader:
     build: .
@@ -30,6 +33,7 @@ services:
     volumes:
       - ./:/app
     working_dir: /app
+    profiles: ["legacy"]
 
   routeur:
     build: .
@@ -38,6 +42,7 @@ services:
     volumes:
       - ./:/app
     working_dir: /app
+    profiles: ["legacy"]
 
   mqtt_broker:
     image: eclipse-mosquitto:2.0
@@ -45,7 +50,7 @@ services:
     ports:
       - "1883:1883"
     volumes:
-      - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf
 
   mysql_db:
     image: mysql:8.0
@@ -55,6 +60,7 @@ services:
       MYSQL_DATABASE: zolis_db
     ports:
       - "3306:3306"
+    profiles: ["legacy"]
 
   db:
     image: postgres:16
@@ -73,8 +79,6 @@ services:
     volumes:
       - ./:/app
     working_dir: /app
-    ports:
-      - "8000:8000"
     environment:
       PYTHONPATH: /app
       MQTT_BROKER_ADDRESS: mqtt_broker
@@ -88,6 +92,7 @@ services:
     depends_on:
       - mqtt_broker
       - db
+      - coap-routeur
 
   frontend:
     build: .
@@ -99,50 +104,81 @@ services:
     ports:
       - "5000:5000"
     environment:
-      BACKEND_HTTP: "http://127.0.0.1:8000"
+      BACKEND_HTTP: "http://backend:8000"
       MQTT_BROKER_ADDRESS: mqtt_broker
       MQTT_BROKER_PORT: 1883
       MQTT_TOPIC: "Naruto Best Anime"
       MQTT_CLIENT_ID: "frontend-subscriber"
     depends_on:
       - mqtt_broker
+      - backend
 
   coap-gps:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.openthread-posix
     container_name: coap-gps
-    command: python -m Couches.CoAPServices.gps_server
+    command: ["/app/Couches/Openthread/node_start.sh", "python", "-m", "Couches.CoAPServices.gps_server"]
     volumes:
       - ./:/app
+      - ot_state:/ot_state
     working_dir: /app
     environment:
       SHARED_KEY: "zolis-key"
+      NODE_NAME: "gps"
+      NODE_ID: "1"
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
 
   coap-batt:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.openthread-posix
     container_name: coap-batt
-    command: python -m Couches.CoAPServices.battery_server
+    command: ["/app/Couches/Openthread/node_start.sh", "python", "-m", "Couches.CoAPServices.battery_server"]
     volumes:
       - ./:/app
+      - ot_state:/ot_state
     working_dir: /app
     environment:
       SHARED_KEY: "zolis-key"
+      NODE_NAME: "batterie"
+      NODE_ID: "2"
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
 
   coap-temp:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.openthread-posix
     container_name: coap-temp
-    command: python -m Couches.CoAPServices.temperature_server
+    command: ["/app/Couches/Openthread/node_start.sh", "python", "-m", "Couches.CoAPServices.temperature_server"]
     volumes:
       - ./:/app
+      - ot_state:/ot_state
     working_dir: /app
     environment:
       SHARED_KEY: "zolis-key"
+      NODE_NAME: "temperature"
+      NODE_ID: "3"
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
 
   coap-leader:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.openthread-posix
     container_name: coap-leader
-    command: python -m Couches.CoAPServices.leader_server
+    command: ["/app/Couches/Openthread/node_start.sh", "python", "-m", "Couches.CoAPServices.leader_server"]
     volumes:
       - ./:/app
+      - ot_state:/ot_state
     working_dir: /app
     environment:
       SHARED_KEY: "zolis-key"
@@ -150,37 +186,42 @@ services:
       COAP_BATTERY_HOST: coap-batt
       COAP_TEMP_HOST: coap-temp
       ELECTION_INTERVAL: "20"
+      NODE_NAME: "leader"
+      NODE_ID: "4"
+    depends_on:
+      - coap-gps
+      - coap-batt
+      - coap-temp
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
 
   coap-routeur:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.openthread-posix
     container_name: coap-routeur
-    command: python -m Couches.CoAPServices.routeur_server
+    command: ["/app/Couches/Openthread/node_start.sh", "python", "-m", "Couches.CoAPServices.routeur_server"]
     volumes:
       - ./:/app
+      - ot_state:/ot_state
     working_dir: /app
     environment:
       SHARED_KEY: "zolis-key"
       COAP_LEADER_HOST: coap-leader
       MQTT_BROKER_ADDRESS: mqtt_broker
       MQTT_BROKER_PORT: 1883
+      NODE_NAME: "routeur"
+      NODE_ID: "5"
+      LEADER_ADDR_FILE: /ot_state/leader.addr
     depends_on:
       - mqtt_broker
       - coap-leader
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
 
-  ot-rt:
-    build:
-      context: .
-      dockerfile: Dockerfile.openthread
-    container_name: ot-rt
-    command: ["ot-cli-ftd", "1"]
-    stdin_open: true
-    tty: true
-
-  ot-batt:
-    build:
-      context: .
-      dockerfile: Dockerfile.openthread
-    container_name: ot-batt
-    command: ["ot-cli-ftd", "2"]
-    stdin_open: true
-    tty: true
+volumes:
+  ot_state:

@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import random
+import socket
 import time
 
 import aiocoap
@@ -30,9 +31,16 @@ class LeaderState:
 
 async def coap_get(protocol, uri):
     request = aiocoap.Message(code=aiocoap.GET, uri=uri)
-    response = await protocol.request(request).response
+    response = await asyncio.wait_for(protocol.request(request).response, timeout=3)
     payload = response.payload.decode("utf-8", errors="replace")
     return json.loads(payload)
+
+
+def _resolve_ipv4(host):
+    try:
+        return socket.gethostbyname(host)
+    except Exception:
+        return host
 
 
 class CollectResource(resource.Resource):
@@ -50,9 +58,12 @@ class CollectResource(resource.Resource):
             return aiocoap.Message(code=aiocoap.UNAUTHORIZED, payload=b"invalid key")
 
         protocol = await aiocoap.Context.create_client_context()
-        gps = await coap_get(protocol, f"coap://{COAP_GPS_HOST}/gps")
-        batt = await coap_get(protocol, f"coap://{COAP_BATTERY_HOST}/battery")
-        temp = await coap_get(protocol, f"coap://{COAP_TEMP_HOST}/temperature")
+        try:
+            gps = await coap_get(protocol, f"coap://{_resolve_ipv4(COAP_GPS_HOST)}/gps")
+            batt = await coap_get(protocol, f"coap://{_resolve_ipv4(COAP_BATTERY_HOST)}/battery")
+            temp = await coap_get(protocol, f"coap://{_resolve_ipv4(COAP_TEMP_HOST)}/temperature")
+        finally:
+            await protocol.shutdown()
 
         payload = {
             "leader_id": self.state.current_leader,
@@ -68,8 +79,10 @@ def main():
     state = LeaderState()
     root = resource.Site()
     root.add_resource(["collect"], CollectResource(state))
-    asyncio.get_event_loop().create_task(aiocoap.Context.create_server_context(root))
-    asyncio.get_event_loop().run_forever()
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(aiocoap.Context.create_server_context(root, bind=("0.0.0.0", 5683)))
+    print("coap-leader listening on 0.0.0.0:5683", flush=True)
+    loop.run_forever()
 
 
 if __name__ == "__main__":

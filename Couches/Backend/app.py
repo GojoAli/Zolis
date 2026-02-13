@@ -2,6 +2,7 @@ import asyncio
 import json
 import math
 import os
+import socket
 import time
 import uuid
 
@@ -53,30 +54,54 @@ def haversine_m(lat1, lon1, lat2, lon2):
     return r * c
 
 
+def _resolve_ipv4(host):
+    try:
+        return socket.gethostbyname(host)
+    except Exception:
+        return host
+
+
 async def coap_collect():
+    host = _resolve_ipv4(COAP_ROUTEUR_HOST)
     protocol = await aiocoap.Context.create_client_context()
-    request = aiocoap.Message(
-        code=aiocoap.POST,
-        uri=f"coap://{COAP_ROUTEUR_HOST}/collect",
-        payload=json.dumps({"key": SHARED_KEY}).encode("utf-8"),
-    )
-    response = await protocol.request(request).response
-    payload = response.payload.decode("utf-8", errors="replace")
-    return json.loads(payload)
+    try:
+        request = aiocoap.Message(
+            code=aiocoap.POST,
+            uri=f"coap://{host}/collect",
+            payload=json.dumps({"key": SHARED_KEY}).encode("utf-8"),
+        )
+        response = await asyncio.wait_for(protocol.request(request).response, timeout=4)
+        payload = response.payload.decode("utf-8", errors="replace")
+        return json.loads(payload)
+    finally:
+        await protocol.shutdown()
 
 
 @app.on_event("startup")
 async def startup():
-    client = mqtt.Client(client_id=CONF.MQTT_CLIENT_ID)
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=CONF.MQTT_CLIENT_ID)
     client.on_message = on_mqtt_message
-    client.connect(CONF.MQTT_BROKER_ADDRESS, CONF.MQTT_BROKER_PORT, 60)
-    client.subscribe(CONF.MQTT_TOPIC)
+    client.on_connect = on_mqtt_connect
+    try:
+        client.connect_async(CONF.MQTT_BROKER_ADDRESS, CONF.MQTT_BROKER_PORT, 60)
+    except Exception:
+        pass
+    client.reconnect_delay_set(min_delay=1, max_delay=10)
     client.loop_start()
     app.state.mqtt_sub = client
 
     app.state.last_point = None
     app.state.total_distance_m = 0.0
     app.state.current_session_id = None
+
+    # Keep backend usable without manual alembic command on a fresh volume.
+    from Couches.Backend.db import Base, engine
+    Base.metadata.create_all(bind=engine)
+
+
+def on_mqtt_connect(client, userdata, flags, reason_code, properties):
+    if reason_code == 0:
+        client.subscribe(CONF.MQTT_TOPIC)
 
 
 @app.get("/api/latest")
@@ -115,8 +140,13 @@ def create_runner(payload: dict):
 
 @app.post("/api/collect")
 async def collect():
-    payload = await coap_collect()
-    return payload
+    try:
+        payload = await coap_collect()
+        return payload
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503, detail=f"collect unavailable: {type(exc).__name__}: {exc}"
+        )
 
 
 @app.get("/api/sessions/{session_id}")

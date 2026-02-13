@@ -30,8 +30,10 @@ class TemperatureResource(resource.Resource):
 def main():
     root = resource.Site()
     root.add_resource(["temperature"], TemperatureResource())
-    asyncio.get_event_loop().create_task(aiocoap.Context.create_server_context(root))
-    asyncio.get_event_loop().run_forever()
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(aiocoap.Context.create_server_context(root, bind=("0.0.0.0", 5683)))
+    print("coap-temp listening on 0.0.0.0:5683", flush=True)
+    loop.run_forever()
 
 
 if __name__ == "__main__":

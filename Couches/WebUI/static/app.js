@@ -11,7 +11,7 @@ const tsEl = document.getElementById("timestamp");
 const loadHistoryBtn = document.getElementById("loadHistory");
 const collectNowBtn = document.getElementById("collectNow");
 
-const backend = window.BACKEND_HTTP || "http://127.0.0.1:8000";
+const backend = "/api/backend";
 const params = new URLSearchParams(window.location.search);
 const sessionId = params.get("session_id") || localStorage.getItem("zolis_session_id");
 
@@ -43,7 +43,7 @@ function updateStatus(isLive) {
 async function refresh() {
   try {
     if (sessionId) {
-      fetch(`${backend}/api/collect`, { method: "POST" }).catch(() => {});
+      fetch(`${backend}/collect`, { method: "POST" }).catch(() => {});
     }
     const response = await fetch("/api/latest", { cache: "no-store" });
     const data = await response.json();
@@ -100,7 +100,7 @@ async function loadHistory() {
     return;
   }
   try {
-    const res = await fetch(`${backend}/api/sessions/${sessionId}/measures`);
+    const res = await fetch(`${backend}/sessions/${sessionId}/measures`);
     if (!res.ok) {
       throw new Error("history");
     }
@@ -125,7 +125,7 @@ async function collectNow() {
     return;
   }
   try {
-    await fetch(`${backend}/api/collect`, { method: "POST" });
+    await fetch(`${backend}/collect`, { method: "POST" });
   } catch (err) {
     alert("Collect impossible.");
   }
@@ -140,7 +140,7 @@ async function loadSessionMeta() {
     return;
   }
   try {
-    const res = await fetch(`${backend}/api/sessions/${sessionId}`);
+    const res = await fetch(`${backend}/sessions/${sessionId}`);
     if (!res.ok) {
       return;
     }

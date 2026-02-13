@@ -1,0 +1,36 @@
+FROM debian:bookworm-slim
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+     git ca-certificates build-essential cmake ninja-build bash \
+     python3 python3-pip python3-venv pkg-config libreadline-dev libncurses-dev libdbus-1-dev libssl-dev \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt
+RUN git clone https://github.com/openthread/openthread.git
+WORKDIR /opt/openthread
+RUN git submodule update --init --recursive
+RUN bash ./script/cmake-build posix -DOT_DAEMON=ON -DOT_CLI=ON -DCMAKE_BUILD_TYPE=Release
+RUN bash ./script/cmake-build simulation -DOT_RCP=ON -DCMAKE_BUILD_TYPE=Release
+
+RUN set -eux; \
+    OT_DAEMON_PATH="$(find /opt/openthread/build -type f -name ot-daemon | head -n 1)"; \
+    OT_CTL_PATH="$(find /opt/openthread/build -type f -name ot-ctl | head -n 1)"; \
+    OT_RCP_PATH="$(find /opt/openthread/build -type f -name ot-rcp | head -n 1)"; \
+    test -n "$OT_DAEMON_PATH"; \
+    test -n "$OT_CTL_PATH"; \
+    test -n "$OT_RCP_PATH"; \
+    ln -sf "$OT_DAEMON_PATH" /usr/local/bin/ot-daemon; \
+    ln -sf "$OT_CTL_PATH" /usr/local/bin/ot-ctl; \
+    ln -sf "$OT_RCP_PATH" /usr/local/bin/ot-rcp
+
+WORKDIR /app
+COPY requirements.txt /app/requirements.txt
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:${PATH}"
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY Couches /app/Couches
+COPY Couches/Openthread /app/Couches/Openthread
+
+CMD ["bash", "/app/Couches/Openthread/node_start.sh"]

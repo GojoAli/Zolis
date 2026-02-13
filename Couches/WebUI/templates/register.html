@@ -46,7 +46,7 @@
   </div>
 
   <script>
-    const backend = "{{ backend_http }}";
+    const backend = "/api/backend";
     const form = document.getElementById("registerForm");
     const statusMsg = document.getElementById("statusMsg");
 
@@ -63,7 +63,7 @@
         },
       };
       try {
-        const res = await fetch(`${backend}/api/runners`, {
+        const res = await fetch(`${backend}/runners`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
