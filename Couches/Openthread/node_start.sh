@@ -13,6 +13,9 @@ DATASET_KEY=${DATASET_KEY:-00112233445566778899aabbccddeeff}
 DATASET_NAME=${DATASET_NAME:-ZolisNet}
 
 mkdir -p "$OT_STATE_DIR"
+ADDR_FILE="$OT_STATE_DIR/${NODE_NAME}.addr"
+# Prevent stale addresses from previous runs when the OT stack is not available.
+rm -f "$ADDR_FILE"
 
 start_daemon() {
   rm -f /tmp/ot-daemon.log
@@ -53,6 +56,7 @@ if [ "$ready" != true ]; then
   if [ "$OT_REQUIRED" = "1" ]; then
     exit 1
   fi
+  rm -f "$ADDR_FILE"
   echo "Proceeding without OpenThread session (OT_REQUIRED=0)."
   if [ $# -gt 0 ]; then
     exec "$@"
@@ -84,7 +88,9 @@ done
 # Save first ULA address
 addr=$(ot-ctl -I "$NODE_IF" ipaddr | awk '/^fd/{print $1; exit}')
 if [ -n "${addr}" ]; then
-  echo "$addr" > "$OT_STATE_DIR/${NODE_NAME}.addr"
+  echo "$addr" > "$ADDR_FILE"
+else
+  rm -f "$ADDR_FILE"
 fi
 
 # Execute service command

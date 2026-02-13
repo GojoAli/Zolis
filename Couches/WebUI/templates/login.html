@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Zolis · Enregistrement</title>
+  <title>Zolis · Connexion</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -14,47 +14,39 @@
     <header class="topbar">
       <div>
         <p class="eyebrow">Zolis</p>
-        <h1>Créer un compte</h1>
+        <h1>Connexion coureur</h1>
       </div>
-      <a class="status" href="/login">Déjà inscrit ? Se connecter</a>
     </header>
 
     <main class="content single">
       <section class="card form-card">
-        <h2>Inscription</h2>
-        <form id="registerForm">
-          <label>Nom
-            <input type="text" id="name" required />
-          </label>
+        <h2>Se connecter</h2>
+        <form id="loginForm">
           <label>Email
             <input type="email" id="email" required />
           </label>
           <label>Mot de passe
             <input type="password" id="password" required minlength="8" />
           </label>
-          <label>Confirmer le mot de passe
-            <input type="password" id="password2" required minlength="8" />
+          <label>
+            <input type="checkbox" id="newSession" />
+            Créer une nouvelle session
           </label>
-          <label>Device GPS (IPv6)
-            <input type="text" id="gps" placeholder="fd00::1" required />
-          </label>
-          <label>Device Batterie (IPv6)
-            <input type="text" id="batt" placeholder="fd00::2" required />
-          </label>
-          <label>Device Température (IPv6)
-            <input type="text" id="temp" placeholder="fd00::3" required />
-          </label>
-          <button type="submit">Démarrer tracking</button>
+          <button type="submit">Entrer</button>
         </form>
         <p class="muted" id="statusMsg"></p>
+        <p class="muted">
+          Pas encore de compte ?
+          <a class="inline-link" href="/register">Créer un compte</a>
+        </p>
       </section>
     </main>
   </div>
 
   <script>
     const backend = "/api/backend";
-    const form = document.getElementById("registerForm");
     const statusMsg = document.getElementById("statusMsg");
+    const form = document.getElementById("loginForm");
 
     async function parseJsonSafe(response) {
       const text = await response.text();
@@ -70,26 +62,16 @@
 
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
-      statusMsg.textContent = "Enregistrement...";
-      const password = document.getElementById("password").value;
-      const password2 = document.getElementById("password2").value;
-      if (password !== password2) {
-        statusMsg.textContent = "Les mots de passe ne correspondent pas.";
-        return;
-      }
+      statusMsg.textContent = "Connexion...";
 
       const payload = {
-        name: document.getElementById("name").value.trim(),
         email: document.getElementById("email").value.trim(),
-        password,
-        devices: {
-          gps: document.getElementById("gps").value.trim(),
-          batterie: document.getElementById("batt").value.trim(),
-          temperature: document.getElementById("temp").value.trim(),
-        },
+        password: document.getElementById("password").value,
+        new_session: document.getElementById("newSession").checked
       };
+
       try {
-        const res = await fetch(`${backend}/runners`, {
+        const res = await fetch(`${backend}/login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -113,7 +95,7 @@
 
         window.location.href = "/";
       } catch (err) {
-        statusMsg.textContent = `Impossible d'enregistrer: ${err.message}`;
+        statusMsg.textContent = `Connexion impossible: ${err.message}`;
       }
     });
   </script>

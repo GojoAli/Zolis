@@ -71,6 +71,8 @@ services:
       POSTGRES_DB: zolis
     ports:
       - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
 
   backend:
     build: .
@@ -110,6 +112,7 @@ services:
       MQTT_BROKER_ADDRESS: mqtt_broker
       MQTT_BROKER_PORT: 1883
       MQTT_TOPIC: "Naruto Best Anime"
+      MQTT_SUB_TOPIC: "/tracking/#"
       MQTT_CLIENT_ID: "frontend-subscriber"
     depends_on:
       - mqtt_broker
@@ -129,6 +132,7 @@ services:
       SHARED_KEY: "zolis-key"
       NODE_NAME: "gps"
       NODE_ID: "1"
+      OT_REQUIRED: "${ZOLIS_OT_REQUIRED:-0}"
     cap_add:
       - NET_ADMIN
     devices:
@@ -148,6 +152,7 @@ services:
       SHARED_KEY: "zolis-key"
       NODE_NAME: "batterie"
       NODE_ID: "2"
+      OT_REQUIRED: "${ZOLIS_OT_REQUIRED:-0}"
     cap_add:
       - NET_ADMIN
     devices:
@@ -167,6 +172,7 @@ services:
       SHARED_KEY: "zolis-key"
       NODE_NAME: "temperature"
       NODE_ID: "3"
+      OT_REQUIRED: "${ZOLIS_OT_REQUIRED:-0}"
     cap_add:
       - NET_ADMIN
     devices:
@@ -191,12 +197,13 @@ services:
       BATTERY_ADDR_FILE: /ot_state/batterie.addr
       TEMP_ADDR_FILE: /ot_state/temperature.addr
       USE_THREAD_URI: "1"
-      STRICT_THREAD: "0"
+      STRICT_THREAD: "${ZOLIS_STRICT_THREAD:-0}"
       THREAD_TRY_TIMEOUT: "1.0"
       IPV4_TRY_TIMEOUT: "2.5"
       ELECTION_INTERVAL: "20"
       NODE_NAME: "leader"
       NODE_ID: "4"
+      OT_REQUIRED: "${ZOLIS_OT_REQUIRED:-0}"
     depends_on:
       - coap-gps
       - coap-batt
@@ -222,12 +229,14 @@ services:
       MQTT_BROKER_ADDRESS: mqtt_broker
       MQTT_BROKER_PORT: 1883
       USE_THREAD_URI: "1"
-      STRICT_THREAD: "0"
+      STRICT_THREAD: "${ZOLIS_STRICT_THREAD:-0}"
       THREAD_TRY_TIMEOUT: "1.0"
       IPV4_TRY_TIMEOUT: "4.0"
       NODE_NAME: "routeur"
       NODE_ID: "5"
       LEADER_ADDR_FILE: /ot_state/leader.addr
+      OT_REQUIRED: "${ZOLIS_OT_REQUIRED:-0}"
+      ROUTEUR_PUBLISH_MQTT: "0"
     depends_on:
       - mqtt_broker
       - coap-leader
@@ -238,3 +247,4 @@ services:
 
 volumes:
   ot_state:
+  pg_data:

@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Zolis · Mes sessions</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Zolis</p>
+        <h1>Sessions de {{ runner_name }}</h1>
+      </div>
+      <div class="status">
+        <a href="/">Retour carte</a>
+        <a href="/logout">Déconnexion</a>
+      </div>
+    </header>
+
+    <main class="content single">
+      <section class="card form-card">
+        <h2>Mes sessions</h2>
+        <p class="muted">Session active: <span id="activeSession">{{ active_session_id or "aucune" }}</span></p>
+        <button id="createSessionBtn">Créer une nouvelle session</button>
+        <p class="muted" id="statusMsg"></p>
+        <div id="sessionsList" class="session-list"></div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const statusMsg = document.getElementById("statusMsg");
+    const sessionsList = document.getElementById("sessionsList");
+    const activeSession = document.getElementById("activeSession");
+    const createSessionBtn = document.getElementById("createSessionBtn");
+
+    async function parseJsonSafe(response) {
+      const text = await response.text();
+      if (!text) {
+        return {};
+      }
+      try {
+        return JSON.parse(text);
+      } catch (err) {
+        return { detail: text };
+      }
+    }
+
+    async function selectSession(sessionId) {
+      const resp = await fetch("/auth/session/select", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+      if (!resp.ok) {
+        throw new Error("impossible de sélectionner la session");
+      }
+      window.location.href = "/";
+    }
+
+    function renderSessions(items) {
+      sessionsList.innerHTML = "";
+      if (!Array.isArray(items) || items.length === 0) {
+        sessionsList.innerHTML = '<p class="muted">Aucune session disponible.</p>';
+        return;
+      }
+
+      for (const item of items) {
+        const row = document.createElement("div");
+        row.className = "session-row";
+
+        const info = document.createElement("div");
+        info.innerHTML = `
+          <strong>${item.id}</strong><br />
+          <span class="muted">${new Date(item.started_at).toLocaleString("fr-FR")} · ${Number(item.total_distance_m).toFixed(1)} m</span>
+        `;
+
+        const btn = document.createElement("button");
+        btn.textContent = "Ouvrir";
+        btn.addEventListener("click", async () => {
+          try {
+            await selectSession(item.id);
+          } catch (err) {
+            statusMsg.textContent = err.message;
+          }
+        });
+
+        row.appendChild(info);
+        row.appendChild(btn);
+        sessionsList.appendChild(row);
+      }
+    }
+
+    async function loadSessions() {
+      try {
+        const res = await fetch("/api/backend/my-sessions");
+        const data = await parseJsonSafe(res);
+        if (!res.ok) {
+          throw new Error(data.detail || data.error || `HTTP ${res.status}`);
+        }
+        renderSessions(data);
+      } catch (err) {
+        statusMsg.textContent = `Impossible de charger les sessions: ${err.message}`;
+      }
+    }
+
+    createSessionBtn.addEventListener("click", async () => {
+      statusMsg.textContent = "Création de session...";
+      try {
+        const res = await fetch("/api/backend/my-sessions", { method: "POST" });
+        const data = await parseJsonSafe(res);
+        if (!res.ok) {
+          throw new Error(data.detail || data.error || `HTTP ${res.status}`);
+        }
+        if (!data.session_id) {
+          throw new Error("session_id manquant");
+        }
+        activeSession.textContent = data.session_id;
+        await selectSession(data.session_id);
+      } catch (err) {
+        statusMsg.textContent = `Impossible de créer la session: ${err.message}`;
+      }
+    });
+
+    loadSessions();
+  </script>
+</body>
+</html>

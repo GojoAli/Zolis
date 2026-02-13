@@ -18,12 +18,15 @@
         <h1>Trajet en temps réel</h1>
       </div>
       <div class="status">
+        <span>{{ runner_name }}</span>
+        <a href="/logout">Déconnexion</a>
         <span class="dot" id="statusDot"></span>
         <span id="statusText">En attente de données</span>
       </div>
     </header>
     <div class="status">
-      <a href="/register">Enregistrer un coureur</a>
+      <a href="/sessions">Mes sessions</a>
+      <a href="/login">Changer d'utilisateur</a>
       <button id="collectNow">Collecter</button>
       <button id="loadHistory">Charger l'historique</button>
     </div>
@@ -67,6 +70,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script>
     window.BACKEND_HTTP = "{{ backend_http }}";
+    window.SESSION_ID = "{{ session_id }}";
   </script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>

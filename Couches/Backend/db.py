@@ -27,6 +27,30 @@ class Runner(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     sessions = relationship("Session", back_populates="runner")
+    credential = relationship("RunnerCredential", back_populates="runner", uselist=False)
+    devices = relationship("RunnerDevice", back_populates="runner", uselist=False)
+
+
+class RunnerCredential(Base):
+    __tablename__ = "runner_credentials"
+
+    runner_id = Column(String, ForeignKey("runners.id"), primary_key=True)
+    password_hash = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    runner = relationship("Runner", back_populates="credential")
+
+
+class RunnerDevice(Base):
+    __tablename__ = "runner_devices"
+
+    runner_id = Column(String, ForeignKey("runners.id"), primary_key=True)
+    gps_ipv6 = Column(String, nullable=False)
+    batterie_ipv6 = Column(String, nullable=False)
+    temperature_ipv6 = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    runner = relationship("Runner", back_populates="devices")
 
 
 class Session(Base):

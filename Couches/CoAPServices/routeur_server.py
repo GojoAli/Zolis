@@ -6,7 +6,6 @@ import time
 
 import aiocoap
 import aiocoap.resource as resource
-import paho.mqtt.client as mqtt
 
 from Couches.CONF import CONF
 
@@ -17,9 +16,12 @@ USE_THREAD_URI = os.getenv("USE_THREAD_URI", "1") == "1"
 STRICT_THREAD = os.getenv("STRICT_THREAD", "0") == "1"
 THREAD_TRY_TIMEOUT = float(os.getenv("THREAD_TRY_TIMEOUT", "1.0"))
 IPV4_TRY_TIMEOUT = float(os.getenv("IPV4_TRY_TIMEOUT", "4.0"))
+ROUTEUR_PUBLISH_MQTT = os.getenv("ROUTEUR_PUBLISH_MQTT", "0") == "1"
 
 
 def mqtt_client():
+    import paho.mqtt.client as mqtt
+
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=f"routeur-{int(time.time())}")
     host = os.getenv("MQTT_BROKER_ADDRESS", CONF.MQTT_BROKER_ADDRESS)
     port = int(os.getenv("MQTT_BROKER_PORT", str(CONF.MQTT_BROKER_PORT)))
@@ -85,7 +87,7 @@ async def collect_from_leader(protocol):
 class CollectResource(resource.Resource):
     def __init__(self):
         super().__init__()
-        self.client = mqtt_client()
+        self.client = mqtt_client() if ROUTEUR_PUBLISH_MQTT else None
 
     async def render_post(self, request):
         try:
@@ -120,7 +122,8 @@ class CollectResource(resource.Resource):
             "leader_id": leader_payload.get("leader_id"),
         }
 
-        self.client.publish(CONF.MQTT_TOPIC, json.dumps(payload))
+        if self.client is not None:
+            self.client.publish(CONF.MQTT_TOPIC, json.dumps(payload))
 
         return aiocoap.Message(payload=json.dumps(payload).encode("utf-8"))
 

@@ -12,8 +12,7 @@ const loadHistoryBtn = document.getElementById("loadHistory");
 const collectNowBtn = document.getElementById("collectNow");
 
 const backend = "/api/backend";
-const params = new URLSearchParams(window.location.search);
-const sessionId = params.get("session_id") || localStorage.getItem("zolis_session_id");
+const sessionId = window.SESSION_ID || null;
 
 const map = L.map("map", { zoomControl: false }).setView([0, 0], 2);
 L.control.zoom({ position: "bottomright" }).addTo(map);
@@ -29,6 +28,7 @@ const path = L.polyline([], { color: "#47e1d6", weight: 3 }).addTo(map);
 let lastUpdate = 0;
 let collectInFlight = false;
 let lastCollectTs = 0;
+let lastCollectError = "";
 const COLLECT_INTERVAL_MS = 2500;
 
 function formatCoord(value) {
@@ -38,9 +38,31 @@ function formatCoord(value) {
   return "--";
 }
 
-function updateStatus(isLive) {
-  statusDot.classList.toggle("live", isLive);
-  statusText.textContent = isLive ? "Flux MQTT actif" : "En attente de données";
+function updateStatus(state, message) {
+  statusDot.classList.toggle("live", state === "live");
+  statusText.textContent = message;
+}
+
+function setFallbackCards() {
+  coordsEl.textContent = "--";
+  tempEl.textContent = "--";
+  humiditeEl.textContent = "--";
+  pressionEl.textContent = "--";
+  battEl.textContent = "--";
+  distanceEl.textContent = "--";
+  tsEl.textContent = "--";
+}
+
+async function parseJsonSafe(response) {
+  const text = await response.text();
+  if (!text) {
+    return {};
+  }
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    return { detail: text };
+  }
 }
 
 async function triggerCollect(force = false) {
@@ -54,9 +76,20 @@ async function triggerCollect(force = false) {
   collectInFlight = true;
   lastCollectTs = now;
   try {
-    await fetch(`${backend}/collect`, { method: "POST" });
+    const res = await fetch(`${backend}/collect`, { method: "POST" });
+    if (!res.ok) {
+      const payload = await parseJsonSafe(res);
+      const reason = payload.detail || payload.error || `HTTP ${res.status}`;
+      if (res.status === 401 || reason.toLowerCase().includes("session expired")) {
+        window.location.href = "/login";
+        return;
+      }
+      lastCollectError = reason;
+      return;
+    }
+    lastCollectError = "";
   } catch (err) {
-    // ignore; latest data endpoint remains authoritative for UI display
+    lastCollectError = "backend indisponible";
   } finally {
     collectInFlight = false;
   }
@@ -66,16 +99,29 @@ async function refresh() {
   try {
     triggerCollect().catch(() => {});
     const response = await fetch(`${backend}/latest`, { cache: "no-store" });
-    const data = await response.json();
+    if (!response.ok) {
+      const payload = await parseJsonSafe(response);
+      const reason = (payload.detail || payload.error || "").toLowerCase();
+      if (response.status === 401 || reason.includes("session")) {
+        window.location.href = "/login";
+        return;
+      }
+      updateStatus("error", "Backend indisponible");
+      setFallbackCards();
+      return;
+    }
+    const data = await parseJsonSafe(response);
     if (!data || !data.gps) {
-      updateStatus(false);
+      updateStatus("idle", "Aucune donnée capteur reçue");
+      setFallbackCards();
       return;
     }
 
     const lat = Number(data.gps.latitude);
     const lng = Number(data.gps.longitude);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-      updateStatus(false);
+      updateStatus("idle", "Position invalide");
+      setFallbackCards();
       return;
     }
 
@@ -107,13 +153,17 @@ async function refresh() {
       ? new Date(data.ts * 1000).toLocaleTimeString("fr-FR")
       : "--";
 
-    updateStatus(true);
+    const statusMessage = lastCollectError
+      ? `Flux partiel: ${lastCollectError}`
+      : "Flux capteurs actif";
+    updateStatus("live", statusMessage);
     lastUpdate = Date.now();
     if (sessionId) {
       loadSessionMeta();
     }
   } catch (err) {
-    updateStatus(false);
+    updateStatus("error", "Erreur réseau avec le backend");
+    setFallbackCards();
   }
 }
 
@@ -145,6 +195,9 @@ if (loadHistoryBtn) {
 async function collectNow() {
   try {
     await triggerCollect(true);
+    if (lastCollectError) {
+      alert(`Collect impossible: ${lastCollectError}`);
+    }
   } catch (err) {
     alert("Collect impossible.");
   }

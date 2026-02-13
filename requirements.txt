@@ -6,3 +6,4 @@ aiocoap==0.4.7
 SQLAlchemy==2.0.37
 psycopg2-binary==2.9.9
 alembic==1.14.0
+pytest==8.3.4
