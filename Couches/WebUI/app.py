@@ -111,18 +111,21 @@ def _forward_backend(path, method="GET", payload=None, query_string=None):
         headers["Content-Type"] = "application/json"
 
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
-    for _ in range(3):
+    timeout_s = 15 if path == "/api/collect" else 10
+    attempts = 1 if path == "/api/collect" else 3
+    last_error = "unknown error"
+    for _ in range(attempts):
         try:
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with urllib.request.urlopen(req, timeout=timeout_s) as resp:
                 body = resp.read()
                 content_type = resp.headers.get("Content-Type", "application/json")
                 return Response(body, status=resp.status, content_type=content_type)
         except urllib.error.HTTPError as exc:
             return Response(exc.read(), status=exc.code, content_type="application/json")
-        except Exception:
+        except Exception as exc:
+            last_error = str(exc)
             time.sleep(0.4)
-
-    return jsonify({"error": "backend unavailable"}), 502
+    return jsonify({"error": "backend unavailable", "detail": last_error}), 502
 
 
 @app.post("/api/backend/runners")
@@ -133,6 +136,11 @@ def api_backend_runners():
 @app.post("/api/backend/collect")
 def api_backend_collect():
     return _forward_backend("/api/collect", method="POST", payload={})
+
+
+@app.get("/api/backend/latest")
+def api_backend_latest():
+    return _forward_backend("/api/latest", method="GET")
 
 
 @app.get("/api/backend/sessions/<session_id>")

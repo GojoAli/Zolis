@@ -89,6 +89,8 @@ services:
       COAP_ROUTEUR_HOST: coap-routeur
       DATABASE_URL: "postgresql://zolis:zolis@db:5432/zolis"
       SHARED_KEY: "zolis-key"
+      COLLECT_RETRIES: "1"
+      COLLECT_TIMEOUT_S: "8"
     depends_on:
       - mqtt_broker
       - db
@@ -185,6 +187,13 @@ services:
       COAP_GPS_HOST: coap-gps
       COAP_BATTERY_HOST: coap-batt
       COAP_TEMP_HOST: coap-temp
+      GPS_ADDR_FILE: /ot_state/gps.addr
+      BATTERY_ADDR_FILE: /ot_state/batterie.addr
+      TEMP_ADDR_FILE: /ot_state/temperature.addr
+      USE_THREAD_URI: "1"
+      STRICT_THREAD: "0"
+      THREAD_TRY_TIMEOUT: "1.0"
+      IPV4_TRY_TIMEOUT: "2.5"
       ELECTION_INTERVAL: "20"
       NODE_NAME: "leader"
       NODE_ID: "4"
@@ -212,6 +221,10 @@ services:
       COAP_LEADER_HOST: coap-leader
       MQTT_BROKER_ADDRESS: mqtt_broker
       MQTT_BROKER_PORT: 1883
+      USE_THREAD_URI: "1"
+      STRICT_THREAD: "0"
+      THREAD_TRY_TIMEOUT: "1.0"
+      IPV4_TRY_TIMEOUT: "4.0"
       NODE_NAME: "routeur"
       NODE_ID: "5"
       LEADER_ADDR_FILE: /ot_state/leader.addr

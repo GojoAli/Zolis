@@ -27,6 +27,9 @@ const marker = L.marker([0, 0]).addTo(map);
 const path = L.polyline([], { color: "#47e1d6", weight: 3 }).addTo(map);
 
 let lastUpdate = 0;
+let collectInFlight = false;
+let lastCollectTs = 0;
+const COLLECT_INTERVAL_MS = 2500;
 
 function formatCoord(value) {
   if (Number.isFinite(value)) {
@@ -40,12 +43,29 @@ function updateStatus(isLive) {
   statusText.textContent = isLive ? "Flux MQTT actif" : "En attente de données";
 }
 
+async function triggerCollect(force = false) {
+  const now = Date.now();
+  if (!force && now - lastCollectTs < COLLECT_INTERVAL_MS) {
+    return;
+  }
+  if (collectInFlight) {
+    return;
+  }
+  collectInFlight = true;
+  lastCollectTs = now;
+  try {
+    await fetch(`${backend}/collect`, { method: "POST" });
+  } catch (err) {
+    // ignore; latest data endpoint remains authoritative for UI display
+  } finally {
+    collectInFlight = false;
+  }
+}
+
 async function refresh() {
   try {
-    if (sessionId) {
-      fetch(`${backend}/collect`, { method: "POST" }).catch(() => {});
-    }
-    const response = await fetch("/api/latest", { cache: "no-store" });
+    triggerCollect().catch(() => {});
+    const response = await fetch(`${backend}/latest`, { cache: "no-store" });
     const data = await response.json();
     if (!data || !data.gps) {
       updateStatus(false);
@@ -89,6 +109,9 @@ async function refresh() {
 
     updateStatus(true);
     lastUpdate = Date.now();
+    if (sessionId) {
+      loadSessionMeta();
+    }
   } catch (err) {
     updateStatus(false);
   }
@@ -120,12 +143,8 @@ if (loadHistoryBtn) {
 }
 
 async function collectNow() {
-  if (!sessionId) {
-    alert("Aucune session active. Enregistre un coureur.");
-    return;
-  }
   try {
-    await fetch(`${backend}/collect`, { method: "POST" });
+    await triggerCollect(true);
   } catch (err) {
     alert("Collect impossible.");
   }

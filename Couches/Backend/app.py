@@ -17,6 +17,9 @@ from Couches.Couche3.Validation import Validation
 
 COAP_ROUTEUR_HOST = os.getenv("COAP_ROUTEUR_HOST", "coap-routeur")
 SHARED_KEY = os.getenv("SHARED_KEY", "zolis-key")
+COLLECT_RETRIES = int(os.getenv("COLLECT_RETRIES", "1"))
+COLLECT_DELAY_S = float(os.getenv("COLLECT_DELAY_S", "0.3"))
+COLLECT_TIMEOUT_S = float(os.getenv("COLLECT_TIMEOUT_S", "8.0"))
 
 app = FastAPI()
 app.add_middleware(
@@ -61,18 +64,30 @@ def _resolve_ipv4(host):
         return host
 
 
-async def coap_collect():
+async def coap_collect(retries=COLLECT_RETRIES, delay_s=COLLECT_DELAY_S):
     host = _resolve_ipv4(COAP_ROUTEUR_HOST)
     protocol = await aiocoap.Context.create_client_context()
     try:
-        request = aiocoap.Message(
-            code=aiocoap.POST,
-            uri=f"coap://{host}/collect",
-            payload=json.dumps({"key": SHARED_KEY}).encode("utf-8"),
-        )
-        response = await asyncio.wait_for(protocol.request(request).response, timeout=4)
-        payload = response.payload.decode("utf-8", errors="replace")
-        return json.loads(payload)
+        last_error = None
+        for _ in range(retries):
+            try:
+                request = aiocoap.Message(
+                    code=aiocoap.POST,
+                    uri=f"coap://{host}/collect",
+                    payload=json.dumps({"key": SHARED_KEY}).encode("utf-8"),
+                )
+                response = await asyncio.wait_for(
+                    protocol.request(request).response, timeout=COLLECT_TIMEOUT_S
+                )
+                payload = response.payload.decode("utf-8", errors="replace")
+                data = json.loads(payload)
+                if isinstance(data, dict) and data.get("error"):
+                    raise RuntimeError(data["error"])
+                return data
+            except Exception as exc:
+                last_error = exc
+                await asyncio.sleep(delay_s)
+        raise last_error if last_error else RuntimeError("collect failed")
     finally:
         await protocol.shutdown()
 
@@ -94,9 +109,19 @@ async def startup():
     app.state.total_distance_m = 0.0
     app.state.current_session_id = None
 
-    # Keep backend usable without manual alembic command on a fresh volume.
+    # Wait for PostgreSQL readiness before creating schema.
     from Couches.Backend.db import Base, engine
-    Base.metadata.create_all(bind=engine)
+    last_error = None
+    for _ in range(60):
+        try:
+            Base.metadata.create_all(bind=engine)
+            last_error = None
+            break
+        except Exception as exc:
+            last_error = exc
+            await asyncio.sleep(1)
+    if last_error is not None:
+        raise RuntimeError(f"database not ready after retry: {last_error}")
 
 
 def on_mqtt_connect(client, userdata, flags, reason_code, properties):

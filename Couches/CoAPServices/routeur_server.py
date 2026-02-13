@@ -13,7 +13,10 @@ from Couches.CONF import CONF
 COAP_LEADER_HOST = os.getenv("COAP_LEADER_HOST", "coap-leader")
 LEADER_ADDR_FILE = os.getenv("LEADER_ADDR_FILE", "")
 SHARED_KEY = os.getenv("SHARED_KEY", "zolis-key")
-USE_THREAD_URI = os.getenv("USE_THREAD_URI", "0") == "1"
+USE_THREAD_URI = os.getenv("USE_THREAD_URI", "1") == "1"
+STRICT_THREAD = os.getenv("STRICT_THREAD", "0") == "1"
+THREAD_TRY_TIMEOUT = float(os.getenv("THREAD_TRY_TIMEOUT", "1.0"))
+IPV4_TRY_TIMEOUT = float(os.getenv("IPV4_TRY_TIMEOUT", "4.0"))
 
 
 def mqtt_client():
@@ -27,11 +30,11 @@ def mqtt_client():
     return client
 
 
-async def coap_post(protocol, uri, payload):
+async def coap_post(protocol, uri, payload, timeout_s=3.0):
     request = aiocoap.Message(
         code=aiocoap.POST, uri=uri, payload=json.dumps(payload).encode("utf-8")
     )
-    response = await asyncio.wait_for(protocol.request(request).response, timeout=3)
+    response = await asyncio.wait_for(protocol.request(request).response, timeout=timeout_s)
     data = response.payload.decode("utf-8", errors="replace")
     return json.loads(data)
 
@@ -44,9 +47,7 @@ def _resolve_ipv4(host):
 
 
 def leader_uri():
-    if not USE_THREAD_URI:
-        return None
-    if LEADER_ADDR_FILE:
+    if USE_THREAD_URI and LEADER_ADDR_FILE:
         try:
             with open(LEADER_ADDR_FILE, "r", encoding="utf-8") as handle:
                 addr = handle.read().strip()
@@ -54,20 +55,27 @@ def leader_uri():
                 return f"coap://[{addr}]/collect"
         except Exception:
             pass
+    if STRICT_THREAD:
+        raise RuntimeError(f"thread address missing for leader: {LEADER_ADDR_FILE}")
     return None
 
 
 async def collect_from_leader(protocol):
     errors = []
     candidates = []
-    thread_uri = leader_uri()
-    if thread_uri:
-        candidates.append(thread_uri)
-    candidates.append(f"coap://{_resolve_ipv4(COAP_LEADER_HOST)}/collect")
+    try:
+        thread_uri = leader_uri()
+        if thread_uri:
+            candidates.append((thread_uri, THREAD_TRY_TIMEOUT))
+    except Exception as exc:
+        errors.append(f"thread-uri -> {type(exc).__name__}: {exc}")
 
-    for uri in candidates:
+    if not STRICT_THREAD:
+        candidates.append((f"coap://{_resolve_ipv4(COAP_LEADER_HOST)}/collect", IPV4_TRY_TIMEOUT))
+
+    for uri, timeout_s in candidates:
         try:
-            return await coap_post(protocol, uri, {"key": SHARED_KEY})
+            return await coap_post(protocol, uri, {"key": SHARED_KEY}, timeout_s=timeout_s)
         except Exception as exc:
             errors.append(f"{uri} -> {type(exc).__name__}: {exc}")
 

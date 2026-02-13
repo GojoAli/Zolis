@@ -5,6 +5,7 @@ NODE_NAME=${NODE_NAME:-node}
 NODE_ID=${NODE_ID:-1}
 NODE_IF=${NODE_IF:-wpan0}
 OT_STATE_DIR=${OT_STATE_DIR:-/ot_state}
+OT_REQUIRED=${OT_REQUIRED:-0}
 DATASET_CHANNEL=${DATASET_CHANNEL:-15}
 DATASET_PANID=${DATASET_PANID:-0x1234}
 DATASET_EXTPANID=${DATASET_EXTPANID:-dead00beef00cafe}
@@ -49,7 +50,14 @@ if [ "$ready" != true ]; then
   echo "ot-ctl is not ready after retries for NODE_NAME=${NODE_NAME} NODE_ID=${NODE_ID} NODE_IF=${NODE_IF}"
   echo "ot-daemon log follows:"
   cat /tmp/ot-daemon.log || true
-  exit 1
+  if [ "$OT_REQUIRED" = "1" ]; then
+    exit 1
+  fi
+  echo "Proceeding without OpenThread session (OT_REQUIRED=0)."
+  if [ $# -gt 0 ]; then
+    exec "$@"
+  fi
+  sleep infinity
 fi
 
 # Configure dataset
